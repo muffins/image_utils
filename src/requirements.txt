@@ -1,0 +1,3 @@
+imagehash
+python-libmagic
+sqlite
