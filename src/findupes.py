@@ -30,6 +30,9 @@ def findupes():
     # potential dupes
     pass
 
+def main():
+
+
 
 if __name__ == "__main__":
     # parse arguments
@@ -38,7 +41,6 @@ if __name__ == "__main__":
     parser.add_argument("source", type=str)
     parser.add_argument("target", type=str)
     parser.add_argument("genstats", type=bool)
-
 
     if args.genstats:
         genstats()

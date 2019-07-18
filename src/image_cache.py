@@ -45,10 +45,29 @@ class ImageCache(object):
         for root, dirnames, filenames in os.walk(source):
             for filename in filenames:
 
+    def insert(self, filename, path, md5, image_hash):
+        self.cursor.execute(
+            """
+            INSERT INTO image_cache (
+                filename,
+                path,
+                md5,
+                image_hash
+            ) VALUES (
+                {0},
+                {1},
+                {2},
+                {3}
+            )
+            """.format(filename, path, md5, image_hash)
+        )
 
-
-    def insert(self):
-        pass
-
-    def lookup(self):
-        pass
+    def lookup(self, where_clause=""):
+        query = """
+            SELECT * FROM image_cache
+        """
+        if where_clause:
+            query += " " + where_clause
+        query += ";"
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
