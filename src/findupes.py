@@ -2,27 +2,40 @@
 
 import argparse
 import json
+import logging
+import pprint
 import time
 
-# Can maybe use this - https://pypi.org/project/ImageHash/
-# import imagehash
-# hash = imagehash.average_hash(Image.open('test.png'))
-# otherhash = imagehash.average_hash(Image.open('other.bmp'))
-# print(hash == otherhash)
+from image_cache import ImageCache
+from typing import Dict
+
+logging.basicConfig(format="[%(asctime)-15s] %(message)s")
+logger = logging.getLogger("findupes")
+
 
 # Takes in a target directory and computes information about
 # the images contained therin
-def genstats():
-    # TODO: Generate the following
-    #   - Image Count
-    #   - Average image size
-    #   - Total image size on disk
-    #   - Break down of image format
-    # Pretty print it?
-    pass
+def genstats(path: str) -> None:
+    ic = ImageCache()
+    logger.info
+    ic.gen_cache_from_directory(path)
 
+    report = {}
 
-def findupes():
+    querys = {
+        "image_types": "SELECT COUNT(DISTINCT img_type) FROM {};",
+        "total_images": "SELECT COUNT(*) FROM {};",
+        "average_size": "SELECT AVG(size) FROM {}",
+        "total_size": "SELECT SUM(size) FROM {}",
+    }
+
+    for k, v in querys.items():
+        report[k] = ic.query(v.format(ic.get_table()))
+
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(report)
+
+def findupes(source: str, target: str) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
     # to an sqlite3 DB, compute hashes and any necessary pieces for checking
     # if the two images are the same. Then given the target directory, check to
@@ -30,21 +43,36 @@ def findupes():
     # potential dupes
     pass
 
-def main():
-    
+def main(source: str, target: str, genstats: bool) -> None:
+
+    if genstats:
+        genstats(source)
+        return
+    else:
+        findupes(source, target)
 
 
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("source", type=str)
-    parser.add_argument("target", type=str)
-    parser.add_argument("genstats", type=bool)
-
-    if args.genstats:
-        genstats()
-        return
+    parser.add_argument(
+        "-s",
+        "source", 
+        type=str
+    )
+    parser.add_argument(
+        "-t",
+        "target", 
+        type=str
+    )
+    parser.add_argument(
+        "-g",
+        "genstats", 
+        default=False,
+        action="store_true",
+        type=bool
+    )
 
     args = parser.parse_args()
     main(args.source, args.target, args.genstats)
