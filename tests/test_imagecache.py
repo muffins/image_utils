@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 
-from image_cache import ImageCache
+import os
+import sys
 
 from unittest import TestCase
+
+# Insert the src directory for our code to the beginning of the path
+sys.path.insert(
+    0, 
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(__file__),
+            "../src"
+        )
+    )
+)
+from image_cache import ImageCache
 
 
 class TestImageCache(TestCase):
