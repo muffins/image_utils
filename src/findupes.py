@@ -15,21 +15,21 @@ logger = logging.getLogger("findupes")
 
 # Takes in a target directory and computes information about
 # the images contained therin
-def genstats(path: str) -> None:
+def generate_report(path: str) -> None:
     ic = ImageCache()
     logger.info
     ic.gen_cache_from_directory(path)
 
     report = {}
 
-    querys = {
+    queries = {
         "image_types": "SELECT COUNT(DISTINCT img_type) FROM {};",
         "total_images": "SELECT COUNT(*) FROM {};",
-        "average_size": "SELECT AVG(size) FROM {}",
-        "total_size": "SELECT SUM(size) FROM {}",
+        "average_size": "SELECT AVG(size) FROM {};",
+        "total_size": "SELECT SUM(size) FROM {};",
     }
 
-    for k, v in querys.items():
+    for k, v in queries.items():
         report[k] = ic.query(v.format(ic.get_table()))
 
     pp = pprint.PrettyPrinter(indent=4)
@@ -46,7 +46,7 @@ def findupes(source: str, target: str) -> Dict[str, any]:
 def main(source: str, target: str, genstats: bool) -> None:
 
     if genstats:
-        genstats(source)
+        generate_report(source)
         return
     else:
         findupes(source, target)
@@ -58,20 +58,19 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "-s",
-        "source", 
-        type=str
+        "--source",
+        action="store",
     )
     parser.add_argument(
         "-t",
-        "target", 
-        type=str
+        "--target",
+        action="store",
     )
     parser.add_argument(
         "-g",
-        "genstats", 
+        "--genstats", 
         default=False,
-        action="store_true",
-        type=bool
+        action="store_true"
     )
 
     args = parser.parse_args()

@@ -1,4 +1,5 @@
-
 # Ignore any pre-compiled python binary files
 *.pyc
 
+# Ignore databases
+image_cache.sqlite

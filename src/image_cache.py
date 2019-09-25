@@ -23,11 +23,11 @@ from typing import List
     whash TEXT NOT NULL
 """
 
-SUPPORTED_TYPES = set(
+SUPPORTED_TYPES = set([
     "jpeg",
     "png",
     "bmp",
-)
+])
 
 logging.basicConfig(format="[%(asctime)-15s] %(message)s")
 logger = logging.getLogger("image_cache")
@@ -47,8 +47,8 @@ class ImageCache:
         Helper sqlite function to create our table
         """
         self.cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS {0} (
+            f"""
+            CREATE TABLE IF NOT EXISTS {self.db_table} (
                 id INTEGER PRIMARY KEY,
                 filename TEXT NOT NULL,
                 path TEXT NOT NULL,
@@ -57,9 +57,10 @@ class ImageCache:
                 phash TEXT NOT NULL,
                 dhash TEXT NOT NULL,
                 whash TEXT NOT NULL,
-                size INTEGER NOT NULL
+                size INTEGER NOT NULL,
+                img_type TEXT NOT NULL
             )
-            """.format(self.db_table)
+            """
         )
 
     def __del__(self):
@@ -70,12 +71,12 @@ class ImageCache:
         Given a directory generate the image cache for all image files
         """
         for root, dirnames, filenames in os.walk(source):
-            logger.info("Processing {} files in {}".format(len(filenames), root))
+            logger.info(f"Processing {len(filenames)} files in {root}")
             for filename in filenames:
-                full = os.path.join(root, filename)
+                full: str = os.path.join(root, filename)
                 # first verify the file is of an image mime type
-                img_type = magic.from_file(full).lower()
-                mgc = set([x for x in img_type.split()])
+                img_type: str = magic.from_file(full).lower()
+                mgc: set = set([x for x in img_type.split()])
                 if len(mgc.intersection(SUPPORTED_TYPES)) == 0:
                     continue
 
@@ -83,10 +84,10 @@ class ImageCache:
                 img = Image.open(full)
 
                 # finally, compute the md5
-                ahash = imagehash.average_hash(img)
-                phash = imagehash.phash(img)
-                dhash = imagehash.dhash(img)
-                whash = imagehash.whash(img)
+                ahash: str = imagehash.average_hash(img)
+                phash: str = imagehash.phash(img)
+                dhash: str = imagehash.dhash(img)
+                whash: str = imagehash.whash(img)
                 img_md5 = None
                 with open(full, "rb") as fin:
                     data = fin.read()
@@ -94,7 +95,17 @@ class ImageCache:
                     img_md5 = hashlib.md5(data).hexdigest()
 
                 # and store all of this information in our db
-                self.insert(filename, full, img_md5, ahash, phash, dhash, whash, size, img_type)
+                self.insert(
+                    filename, 
+                    full, 
+                    img_md5, 
+                    ahash, 
+                    phash, 
+                    dhash, 
+                    whash, 
+                    size, 
+                    img_type
+                )
             
             # Recursively continue to generate the cache.
             for directory in dirnames:
@@ -113,8 +124,7 @@ class ImageCache:
         Helper sqlite function to insert a new row
         """
         self.cursor.execute(
-            """
-            INSERT INTO {0} (
+            f"""INSERT INTO {self.db_table} (
                 filename,
                 path,
                 md5,
@@ -124,19 +134,17 @@ class ImageCache:
                 whash,
                 size,
                 img_type
-            ) VALUES ( {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9} )
-            """.format(
-                self.db_table, 
-                fname, 
-                path, 
-                md5, 
-                ahash, 
-                phash, 
-                dhash, 
-                whash, 
-                size, 
-                img_type,
-            )
+            ) VALUES ( 
+                {fname}, 
+                {path}, 
+                {md5}, 
+                {ahash}, 
+                {phash}, 
+                {dhash}, 
+                {whash}, 
+                {size}, 
+                {img_type}
+            )"""
         )
 
     def get_table(self) -> str:
@@ -147,9 +155,9 @@ class ImageCache:
         Helper sqlite function to look up any rows that might exist given
         a where clause
         """
-        query = """
-            SELECT * FROM {0}
-        """.format(self.db_table)
+        query = f"""
+            SELECT * FROM {self.db_table}
+        """
         if where_clause:
             query += " " + where_clause
         query += ";"
@@ -160,5 +168,6 @@ class ImageCache:
         """
         Helper sqlite function to exec an arbitrary query
         """
-        self.cursor.execute(query + ";")
+        if not query.endswith(';'):
+            self.cursor.execute(query + ";")
         return self.cursor.fetchall()
