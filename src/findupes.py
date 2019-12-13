@@ -23,6 +23,7 @@ def generate_report(path: str) -> None:
     report = {}
 
     queries = {
+        "all_data": "SELECT * FROM {};",
         "image_types": "SELECT COUNT(DISTINCT img_type) FROM {};",
         "total_images": "SELECT COUNT(*) FROM {};",
         "average_size": "SELECT AVG(size) FROM {};",
