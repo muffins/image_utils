@@ -37,16 +37,49 @@ logging.basicConfig(
 logger = logging.getLogger("image_cache")
 
 
-class ImageCache:
+class ImageHelper(object):
+    """
+    Helper class to process all of the data on an image we desire
+    """
+    def __init__(self, full_path: str) -> None:
+        self.full_path = full_path
+        self.filename = os.path.basename(self.full_path)
 
-    db_table = "image_cache"
+    def process(self) -> None:
+        # first verify the file is of an image mime type
+        self.img_type: str = magic.from_file(self.full_path).lower()
+        imagic: set = set([x for x in self.img_type.split()])
+        if len(imagic.intersection(SUPPORTED_TYPES)) == 0:
+            return
 
-    def __init__(self, db_name="image_cache.sqlite"):
-        self.db = db_name
+        # next, compute the ImageHashes of the file
+        img = Image.open(self.full_path)
+
+        # finally, compute the md5
+        self.ahash: str = str(imagehash.average_hash(img))
+        self.phash: str = str(imagehash.phash(img))
+        self.dhash: str = str(imagehash.dhash(img))
+        self.whash: str = str(imagehash.whash(img))
+        with open(self.full_path, "rb") as fin:
+            self.data = fin.read()
+            self.size: int = len(self.data)
+            self.md5: str = hashlib.md5(self.data).hexdigest()
+
+
+class ImageCache(object):
+
+    new_images = 0
+    def __init__(self, db_name: str = "image_cache.sqlite", 
+                table_name: str = "image_cache"):
+        self.db_name = db_name
+        self.db_table = table_name
         self.conn = sqlite3.connect(db_name)
         self.cursor = self.conn.cursor()
         self.create_table()
         self._lock = threading.Lock()
+
+        self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
+        self.db_curr = self.db_conn.cursor()
 
     def create_table(self) -> None:
         """
@@ -70,35 +103,20 @@ class ImageCache:
         )
 
     def __del__(self):
-        self.cursor.close()
-        self.conn.close()
+        self.db_curr.close()
+        self.db_conn.close()
 
     def gen_stats_for_file(self, full: str) -> Dict[str, any]:
 
-        # first verify the file is of an image mime type
-        img_type: str = magic.from_file(full).lower()
-        mgc: set = set([x for x in img_type.split()])
-        if len(mgc.intersection(SUPPORTED_TYPES)) == 0:
-            return
-
-        # next, compute the ImageHashes of the file
-        img = Image.open(full)
-
-        # finally, compute the md5
-        ahash: str = str(imagehash.average_hash(img))
-        phash: str = str(imagehash.phash(img))
-        dhash: str = str(imagehash.dhash(img))
-        whash: str = str(imagehash.whash(img))
-        with open(full, "rb") as fin:
-            data = fin.read()
-            size: int = len(data)
-            img_md5: str = hashlib.md5(data).hexdigest()
+        image = ImageHelper(full)
+        image.process()
         
-         # and store all of this information in our db
-        self.insert(
-            full, os.path.basename(full), img_md5, 
-            ahash, phash, dhash, whash, size, img_type
-        )
+        # Only insert if we've not seen this image before
+        if len(self.lookup(f"where md5 = '{image.md5}'")) > 0:
+            logger.info(f"{full} already processed, skipping...")
+        else:
+            # and store all of this information in our db
+            self.insert(image)
 
     def gen_cache_from_directory(self, source: str) -> None:
         """
@@ -123,24 +141,30 @@ class ImageCache:
             if t is main_thread:
                 continue
             t.join()
+        self.db_conn.commit()
 
-    def insert(self, fname: str, path: str, md5: str, ahash: str, phash: str, 
-                     dhash: str, whash: str, size: int, img_type: str) -> None:
+    def insert(self, image: ImageHelper) -> None:
         """
         Helper sqlite function to insert a new row
         """
         self._lock.acquire()
-        thread_conn = sqlite3.connect(self.db)
-        thread_curr = thread_conn.cursor()
-        thread_curr.execute(
+        # TODO: This could probably be optimized somehow.
+        self.db_curr.execute(
             f"""INSERT INTO {self.db_table} (
                 filename, path, md5, ahash, phash, dhash, whash, size, img_type
             ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )""",
-            (fname, path, md5, ahash, phash, dhash, whash, size, img_type)
+            (
+                image.filename,
+                image.full_path, 
+                image.md5, 
+                image.ahash, 
+                image.phash, 
+                image.dhash, 
+                image.whash, 
+                image.size, 
+                image.img_type
+            )
         )
-        thread_conn.commit()
-        thread_curr.close()
-        thread_conn.close()
         self._lock.release()
 
 
