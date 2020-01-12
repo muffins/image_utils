@@ -17,3 +17,24 @@ already exists.
 
 ## Usage
 
+```
+PS C:\Users\Nicholas\work\repos\finddupes> python3 .\src\findupes.py --help
+usage: findupes.py [-h] [-d IMAGE_DIR] [-t TARGET] [-b DATABASE] [-s] [-g]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -d IMAGE_DIR, --image_dir IMAGE_DIR
+                        The 'source of truth' image directory. Should be ones
+                        total image store. This is used for sorting, comparing
+                        against, and generating image stats.
+  -t TARGET, --target TARGET
+                        The target folder containing potential duplicate
+                        images
+  -b DATABASE, --database DATABASE
+                        Optional path where the ImageCache database should be
+                        stored. Defaults to the current working directory.
+  -s, --sort_images     When set, sort the images specified with '-d' by year,
+                        month, day as extracted from exif metadata on the
+                        image.
+  -g, --genstats
+```

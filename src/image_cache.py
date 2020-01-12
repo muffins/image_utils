@@ -122,7 +122,7 @@ class ImageCache(object):
         if len(self.lookup(f"where md5 = '{image.md5}'")) > 0:
             logger.info(
                 "Potential duplicate image found: " + 
-                f"{image.full_path}:{image.md5}:{}"
+                f"{image.full_path}:{image.md5}"
             )
             logger.debug(f"{full}:{image.md5} already exists in DB, skipping")
             self.dupes += 1
