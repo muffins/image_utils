@@ -1,5 +1,7 @@
 # finddupes
 
+[![Build Status](https://travis-ci.org/muffins/finddupes.svg?branch=master)](https://travis-ci.org/muffins/finddupes)
+
 ## About 
 
 A simple Python application to help manage folders of pictures. The primary 
