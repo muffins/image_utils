@@ -1,11 +1,11 @@
 language: python
-sudo: false
 python:
   - 3.6
   - 3.7
-  - pypy3
+  - 3.8
+# PyPy versions
+  - "pypy3"
 install:
   - pip install -r requirements.txt
 script:
-  - python setup.py build
-  - python setup.py test
+  - python tests/test_imagecache.py
