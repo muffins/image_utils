@@ -7,6 +7,7 @@ import pprint
 import time
 
 from image_cache import ImageCache
+from image_cache import ImageHelper
 from typing import Dict
 
 logging.basicConfig(format="[%(asctime)-15s] %(message)s")
@@ -17,7 +18,6 @@ logger = logging.getLogger("findupes")
 # the images contained therin
 def generate_report(path: str) -> None:
     ic = ImageCache()
-    logger.info
     ic.gen_cache_from_directory(path)
 
     report = {}
@@ -35,6 +35,8 @@ def generate_report(path: str) -> None:
 
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(report)
+    logger.info(f"Processing took {ic.processing_time} seconds.")
+    logger.info(f"Encountered {ic.dupes} duplicate images.")
 
 def findupes(source: str, target: str) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
@@ -42,9 +44,18 @@ def findupes(source: str, target: str) -> Dict[str, any]:
     # if the two images are the same. Then given the target directory, check to
     # see if the image already exists, if it does to a pprint report about all
     # potential dupes
+    ic = ImageCache()
+    ic.gen_cache_from_directory(source)
+    
+    
+def sort_images(source: str) -> None:
+    # TODO:
+    # Helper function to read in a directory of pictures and sort them all
+    # based off of exif metadata
     pass
 
-def main(source: str, target: str, genstats: bool) -> None:
+
+def main(source: str, target: str, genstats: bool, should_sort: bool) -> None:
 
     if genstats:
         generate_report(source)
@@ -52,20 +63,43 @@ def main(source: str, target: str, genstats: bool) -> None:
     else:
         findupes(source, target)
 
+    if should_sort:
+        sort_images(source)
+
 
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
 
+    # TODO: These arguments don't really make sense.
     parser.add_argument(
-        "-s",
-        "--source",
+        "-d",
+        "--image_dir",
         action="store",
+        help="The 'source of truth' image directory. Should be ones total " +
+             "image store. This is used for sorting, comparing against, and " +
+             "generating image stats.",
     )
     parser.add_argument(
         "-t",
         "--target",
         action="store",
+        help="The target folder containing potential duplicate images",
+    )
+    parser.add_argument(
+        "-b",
+        "--database",
+        action="store",
+        help="Optional path where the ImageCache database should be stored. " + 
+             "Defaults to the current working directory.",
+    )
+    parser.add_argument(
+        "-s",
+        "--sort_images",
+        default=False,
+        action="store_true",
+        help="When set, sort the images specified with '-d' by year, month, " +
+             "day as extracted from exif metadata on the image.",
     )
     parser.add_argument(
         "-g",
@@ -75,4 +109,4 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(args.source, args.target, args.genstats)
+    main(args.image_dir, args.target, args.genstats, args.sort_images)

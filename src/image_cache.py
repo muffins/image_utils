@@ -6,6 +6,7 @@ import logging
 import magic
 import os
 import sqlite3
+import time
 import threading
 
 from PIL import Image
@@ -21,7 +22,9 @@ from typing import List, Dict
     ahash TEXT NOT NULL,
     phash TEXT NOT NULL,
     dhash TEXT NOT NULL,
-    whash TEXT NOT NULL
+    whash TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    img_type TEXT NOT NULL
 """
 
 SUPPORTED_TYPES = set([
@@ -68,24 +71,26 @@ class ImageHelper(object):
 
 class ImageCache(object):
 
-    new_images = 0
+    dupes = 0
     def __init__(self, db_name: str = "image_cache.sqlite", 
                 table_name: str = "image_cache"):
         self.db_name = db_name
         self.db_table = table_name
-        self.conn = sqlite3.connect(db_name)
-        self.cursor = self.conn.cursor()
-        self.create_table()
+        
         self._lock = threading.Lock()
 
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
-        self.db_curr = self.db_conn.cursor()
+
+        self.create_table()
+        
 
     def create_table(self) -> None:
         """
         Helper sqlite function to create our table
         """
-        self.cursor.execute(
+        self._lock.acquire()
+        db_curr = self.db_conn.cursor()
+        db_curr.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.db_table} (
                 id INTEGER PRIMARY KEY,
@@ -101,9 +106,11 @@ class ImageCache(object):
             )
             """
         )
+        db_curr.close()
+        self._lock.release()
 
     def __del__(self):
-        self.db_curr.close()
+        self.db_conn.commit()
         self.db_conn.close()
 
     def gen_stats_for_file(self, full: str) -> Dict[str, any]:
@@ -113,7 +120,12 @@ class ImageCache(object):
         
         # Only insert if we've not seen this image before
         if len(self.lookup(f"where md5 = '{image.md5}'")) > 0:
-            logger.info(f"{full} already processed, skipping...")
+            logger.info(
+                "Potential duplicate image found: " + 
+                f"{image.full_path}:{image.md5}:{}"
+            )
+            logger.debug(f"{full}:{image.md5} already exists in DB, skipping")
+            self.dupes += 1
         else:
             # and store all of this information in our db
             self.insert(image)
@@ -122,6 +134,7 @@ class ImageCache(object):
         """
         Given a directory generate the image cache for all image files
         """
+        start = time.time()
         for root, dirnames, filenames in os.walk(source):
             logger.info(f"Processing {len(filenames)} files in {root}")
             for filename in filenames:
@@ -142,6 +155,7 @@ class ImageCache(object):
                 continue
             t.join()
         self.db_conn.commit()
+        self.processing_time = int(time.time() - start)
 
     def insert(self, image: ImageHelper) -> None:
         """
@@ -149,7 +163,8 @@ class ImageCache(object):
         """
         self._lock.acquire()
         # TODO: This could probably be optimized somehow.
-        self.db_curr.execute(
+        db_curr = self.db_conn.cursor()
+        db_curr.execute(
             f"""INSERT INTO {self.db_table} (
                 filename, path, md5, ahash, phash, dhash, whash, size, img_type
             ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )""",
@@ -165,8 +180,8 @@ class ImageCache(object):
                 image.img_type
             )
         )
+        db_curr.close()
         self._lock.release()
-
 
     def get_table(self) -> str:
         return self.db_table
@@ -182,8 +197,8 @@ class ImageCache(object):
         if where_clause:
             query += " " + where_clause
         query += ";"
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
+        db_curr = self.db_conn.cursor()
+        return db_curr.execute(query).fetchall()
 
     def query(self, query: str = "") -> List[str]:
         """
@@ -191,5 +206,5 @@ class ImageCache(object):
         """
         if not query.endswith(';'):
             query += ';'
-        self.cursor.execute(query)
-        return self.cursor.fetchall()
+        db_curr = self.db_conn.cursor()
+        return db_curr.execute(query).fetchall()
