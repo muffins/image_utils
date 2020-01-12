@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import pprint
 import time
 
@@ -46,6 +47,27 @@ def findupes(source: str, target: str) -> Dict[str, any]:
     # potential dupes
     ic = ImageCache()
     ic.gen_cache_from_directory(source)
+
+    logger.info(f"Processing took {ic.processing_time} seconds.")
+    logger.info(f"Encountered {ic.dupe_count} duplicate images:")
+
+    pp = pprint.PrettyPrinter(indent=4)
+    pp.pprint(ic.get_dupes())
+
+    logger.info(f"Beginning processing of {target} for potential duplicates...")
+    
+    for root, dirnames, filenames in os.walk(source):
+        logger.info(f"Processing {len(filenames)} files in {root}")
+        for f in filenames:
+            full: str = os.path.join(root, f)
+
+            # Check if the filename exists, and the size matches
+
+            # If no file name check for md5
+
+            # If no md5, check for ahash
+            
+
     
     
 def sort_images(source: str) -> None:

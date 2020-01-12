@@ -38,7 +38,6 @@ class TestImageHelper(unittest.TestCase):
 
     def setUp(self):
         self.ic = ImageHelper("./tests/rick_and_morty.png")
-        self.ic.process()
 
     def tearDown(self):
         pass
@@ -46,7 +45,7 @@ class TestImageHelper(unittest.TestCase):
     def test_ih_construction(self):
         self.assertIsInstance(self.ic, ImageHelper)
     
-    def test_ih_get_values(self):
+    def test_ih_native_values(self):
         self.assertIsInstance(self.ic.full_path, str)
         self.assertIsNot(self.ic.full_path, "")
         self.assertIsInstance(self.ic.filename, str)
@@ -58,6 +57,22 @@ class TestImageHelper(unittest.TestCase):
             "png image data, 729 x 486, 8-bit/color rgba, non-interlaced"
         )
 
+        self.assertGreater(len(self.ic.data), 0)
+        self.assertGreater(self.ic.size, 0)
+
+        self.assertIsInstance(self.ic.crc32, str)
+        self.assertIsNot(self.ic.crc32, "17bfa65a")
+
+    def test_ih_md5_computation(self):
+
+        self.ic.compute_md5()
+        self.assertIsInstance(self.ic.md5, str)
+        self.assertIsNot(self.ic.md5, "")
+
+    def test_ih_image_hash_computations(self):
+
+        self.ic.compute_image_hashes()
+        
         self.assertIsInstance(self.ic.ahash, str)
         self.assertIsNot(self.ic.ahash, "")
         self.assertIsInstance(self.ic.phash, str)
@@ -66,12 +81,6 @@ class TestImageHelper(unittest.TestCase):
         self.assertIsNot(self.ic.dhash, "")
         self.assertIsInstance(self.ic.whash, str)
         self.assertIsNot(self.ic.whash, "")
-
-        self.assertIsInstance(self.ic.md5, str)
-        self.assertIsNot(self.ic.md5, "")
-
-        self.assertGreater(len(self.ic.data), 0)
-        self.assertGreater(self.ic.size, 0)
 
 
 if __name__ == '__main__':
