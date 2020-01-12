@@ -53,7 +53,10 @@ class TestImageHelper(unittest.TestCase):
         self.assertIsNot(self.ic.filename, "")
 
         self.assertIsInstance(self.ic.img_type, str)
-        self.assertIsNot(self.ic.img_type, "")
+        self.assertEqual(
+            self.ic.img_type, 
+            "png image data, 729 x 486, 8-bit/color rgba, non-interlaced"
+        )
 
         self.assertIsInstance(self.ic.ahash, str)
         self.assertIsNot(self.ic.ahash, "")
