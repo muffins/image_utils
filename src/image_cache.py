@@ -53,11 +53,9 @@ class ImageHelper(object):
     def __init__(self, full_path: str) -> None:
         self.full_path = full_path
         self.filename = os.path.basename(self.full_path)
+        self.size = os.stat(self.full_path).st_size
         self.data = b''
-        self.size = 0
         self.crc32 = ''
-        self.read_image()
-        self.get_image_type()
 
     def get_image_type(self) -> None:
         """
@@ -77,7 +75,6 @@ class ImageHelper(object):
                 if not data:
                     break
                 self.data += data
-                self.size += len(data)
                 crc32 = zlib.crc32(data, crc32)
         self.crc32 = f"{crc32:08x}"
 
@@ -132,7 +129,7 @@ class ImageCache(object):
     duplicates = []
 
     def __init__(self, db_name: str = "image_cache.sqlite", 
-                table_name: str = "image_cache"):
+                 table_name: str = "image_cache"):
         self.db_name = db_name
         self.db_table = table_name
         
@@ -176,17 +173,20 @@ class ImageCache(object):
     def gen_stats_for_file(self, full: str) -> Dict[str, any]:
 
         image = ImageHelper(full)
-        image.process()
+        image.read_image()
+        image.get_image_type()
+        image.compute_md5()
+        image.compute_image_hashes()
         
         # Only insert if we've not seen this image before
-        if len(self.lookup(f"where md5 = '{image.md5}'")) > 0:
+        if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
             logger.info(
                 "Potential duplicate image found: " + 
-                f"{image.full_path}:{image.md5}"
+                f"{image.full_path}:{image.crc32}"
             )
-            logger.debug(f"{full}:{image.md5} already exists in DB, skipping")
+            logger.debug(f"{full}:{image.crc32} already exists in DB, skipping")
             self.dupe_count += 1
-            self.duplicates += image
+            self.duplicates.append(image)
         else:
             # and store all of this information in our db
             self.insert(image)
@@ -250,7 +250,7 @@ class ImageCache(object):
     def lookup(self, where_clause: str = "") -> List[str]:
         """
         Helper sqlite function to look up any rows that might exist given
-        a where clause
+        a where clause. Returns at most one row.
         """
         query = f"""
             SELECT * FROM {self.db_table}
@@ -259,7 +259,7 @@ class ImageCache(object):
             query += " " + where_clause
         query += ";"
         db_curr = self.db_conn.cursor()
-        return db_curr.execute(query).fetchall()
+        return db_curr.execute(query).fetchone()
 
     def query(self, query: str = "") -> List[str]:
         """

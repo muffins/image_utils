@@ -38,9 +38,13 @@ class TestImageHelper(unittest.TestCase):
 
     def setUp(self):
         self.ic = ImageHelper("./tests/rick_and_morty.png")
+        self.ic.read_image()
+        self.ic.get_image_type()
 
     def test_ih_construction(self):
         self.assertIsInstance(self.ic, ImageHelper)
+        self.assertTrue(os.path.exists(self.ic.full_path))
+        self.assertEqual(self.ic.size, 464461)
     
     def test_ih_native_values(self):
         self.assertIsInstance(self.ic.full_path, str)
@@ -55,7 +59,6 @@ class TestImageHelper(unittest.TestCase):
         )
 
         self.assertGreater(len(self.ic.data), 0)
-        self.assertEqual(self.ic.size, 464461)
 
         self.assertIsInstance(self.ic.crc32, str)
         self.assertIsNot(self.ic.crc32, "17bfa65a")

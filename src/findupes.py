@@ -37,16 +37,17 @@ def generate_report(path: str) -> None:
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(report)
     logger.info(f"Processing took {ic.processing_time} seconds.")
-    logger.info(f"Encountered {ic.dupes} duplicate images.")
+    logger.info(f"Encountered {ic.dupe_count} duplicate images.")
 
-def findupes(source: str, target: str) -> Dict[str, any]:
+def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
     # to an sqlite3 DB, compute hashes and any necessary pieces for checking
     # if the two images are the same. Then given the target directory, check to
     # see if the image already exists, if it does to a pprint report about all
     # potential dupes
     ic = ImageCache()
-    ic.gen_cache_from_directory(source)
+    if not skip:
+        ic.gen_cache_from_directory(source)
 
     logger.info(f"Processing took {ic.processing_time} seconds.")
     logger.info(f"Encountered {ic.dupe_count} duplicate images:")
@@ -54,22 +55,59 @@ def findupes(source: str, target: str) -> Dict[str, any]:
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(ic.get_dupes())
 
-    logger.info(f"Beginning processing of {target} for potential duplicates...")
+    logger.info(
+        f"Beginning processing of {target} for potential duplicates. " +
+        "Report will be displayed with duplicates, ambiguous files, and " +
+        "suggested files for copying when finished. This may take a long time."
+    )
+
+    report = {
+        'duplicates': [],
+        'ambiguous': [],
+        'migrate': [],
+    }
     
-    for root, dirnames, filenames in os.walk(source):
+    for root, _, filenames in os.walk(source):
         logger.info(f"Processing {len(filenames)} files in {root}")
         for f in filenames:
             full: str = os.path.join(root, f)
-
-            # Check if the filename exists, and the size matches
+            
+            # Check if the file/size exists in the db.
+            row = ic.lookup(
+                f"WHERE filename = '{f}'"
+            )
+            image: ImageHelper = ImageHelper(full)
+            if len(row) > 0:
+                logger.warning(f"Possible duplicate image found: {full}")
+                logger.warning("Checking CRC32 and MD5 of image. . .")
+                image.compute_md5()
+                
+                # TODO: Consider swapping this with just size. If a file has 
+                # the same name, and the same size... Odds are it's the same.
+                
+                if row[3] == image.crc32 and row[4] == image.md5:
+                    logger.warning(
+                        f"Duplicate image verified, {full} already exists in " +
+                        f"{source} at {row[2]}"
+                    )
+                    report['duplicates'].append(image.full_path)
+                else:
+                    logger.warning(
+                        f"Ambiguous files detected. {full} has same size and " +
+                        f"name as source directory file {row[2]}, but md5 or " +
+                        "crc32 do not match."
+                    )
+                    report['ambiguous'].append(image.full_path)
+                continue
 
             # If no file name check for md5
 
             # If no md5, check for ahash
-            
+            report['migrate'].append(image.full_path)
+    
+    pp.pprint(report)
 
-    
-    
+
 def sort_images(source: str) -> None:
     # TODO:
     # Helper function to read in a directory of pictures and sort them all
@@ -77,13 +115,14 @@ def sort_images(source: str) -> None:
     pass
 
 
-def main(source: str, target: str, genstats: bool, should_sort: bool) -> None:
+def main(source: str, target: str, genstats: bool, 
+         should_sort: bool, skip: bool) -> None:
 
     if genstats:
         generate_report(source)
         return
     else:
-        findupes(source, target)
+        findupes(source, target, skip)
 
     if should_sort:
         sort_images(source)
@@ -101,6 +140,14 @@ if __name__ == "__main__":
         help="The 'source of truth' image directory. Should be ones total " +
              "image store. This is used for sorting, comparing against, and " +
              "generating image stats.",
+    )
+    parser.add_argument(
+        "--skip_cache_gen",
+        action="store_true",
+        default=False,
+        help="Skips the generation of the source image cache. Use this if you" +
+             " are sure that no image changes have taken place since the last" +
+             " run of this program.",
     )
     parser.add_argument(
         "-t",
@@ -131,4 +178,10 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(args.image_dir, args.target, args.genstats, args.sort_images)
+    main(
+        args.image_dir, 
+        args.target, 
+        args.genstats, 
+        args.sort_images, 
+        args.skip_cache_gen
+    )
