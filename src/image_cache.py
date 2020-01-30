@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import hashlib
 import imagehash
 import logging
@@ -191,7 +192,7 @@ class ImageCache(object):
         self.db_conn.commit()
         self.db_conn.close()
 
-    def gen_stats_for_file(self, full: str) -> Dict[str, any]:
+    async def gen_stats_for_file(self, full: str) -> Dict[str, any]:
 
         image = ImageHelper(full)
         image.read_image()
@@ -224,16 +225,8 @@ class ImageCache(object):
             logger.info(f"Processing {len(filenames)} files in {root}")
             for filename in filenames:
                 full: str = os.path.join(root, filename)
-                job = threading.Thread(
-                    target=self.gen_stats_for_file, args=(full,)
-                )
-                job.start()
-        
-        main_thread = threading.current_thread()
-        for t in threading.enumerate():
-            if t is main_thread:
-                continue
-            t.join()
+                asyncio.run(self.gen_stats_for_file(full))
+
         self.db_conn.commit()
         self.processing_time = int(time.time() - start)
 
