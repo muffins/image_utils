@@ -57,11 +57,20 @@ class ImageHelper(object):
         self.data = b''
         self.crc32 = ''
 
-    def get_image_type(self) -> None:
+    def _check_image_type(self) -> None:
         """
         A helper to process the Magic MIME type from the buffer
         """
         self.img_type = magic.from_buffer(self.data[:self.magic_buffer]).lower()
+        # first verify the file is of an image mime type
+        imagic: set = set([x for x in self.img_type.split()])
+        if len(imagic.intersection(SUPPORTED_TYPES)) == 0:
+            logger.error(
+                f"File not an image: {self.full_path}, MIME: {self.img_type}"
+            )
+            self.is_image = False
+        else:
+            self.is_image = True
 
     def read_image(self) -> None:
         """
@@ -77,6 +86,10 @@ class ImageHelper(object):
                 self.data += data
                 crc32 = zlib.crc32(data, crc32)
         self.crc32 = f"{crc32:08x}"
+        
+        # After reading in the full file, compute the image type and check
+        # if it's supported
+        self._check_image_type()
 
     def compute_md5(self) -> None:
         """
@@ -90,12 +103,11 @@ class ImageHelper(object):
         We use ImageHash values to help us identify if we've already seen this 
         file with higher levels of certainty
         """
-        # first verify the file is of an image mime type
-        imagic: set = set([x for x in self.img_type.split()])
-        if len(imagic.intersection(SUPPORTED_TYPES)) == 0:
-            logger.error(
-                f"Inavlid MIME type encountered {self.img_type}. Will not " + 
-                "compute ImageHash values."
+
+        if not self.is_image:
+            logger.warning(
+                "Attempted to compute image hashes on non-image: " +
+                f"{self.img_type}"
             )
             return
 
@@ -174,11 +186,10 @@ class ImageCache(object):
 
         image = ImageHelper(full)
         image.read_image()
-        image.get_image_type()
-        image.compute_md5()
-        image.compute_image_hashes()
+        if not image.is_image:
+            return
         
-        # Only insert if we've not seen this image before
+        # Only insert if it's likely we have not seen this image before
         if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
             logger.info(
                 "Potential duplicate image found: " + 
@@ -188,6 +199,10 @@ class ImageCache(object):
             self.dupe_count += 1
             self.duplicates.append(image)
         else:
+            # Compute the heavy lifting for the image
+            image.compute_md5()
+            image.compute_image_hashes()
+            
             # and store all of this information in our db
             self.insert(image)
 
@@ -259,7 +274,8 @@ class ImageCache(object):
             query += " " + where_clause
         query += ";"
         db_curr = self.db_conn.cursor()
-        return db_curr.execute(query).fetchone()
+        ret = db_curr.execute(query).fetchone()
+        return [] if ret is None else ret
 
     def query(self, query: str = "") -> List[str]:
         """

@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import pprint
+import sys
 import time
 
 from image_cache import ImageCache
@@ -118,10 +119,17 @@ def sort_images(source: str) -> None:
 def main(source: str, target: str, genstats: bool, 
          should_sort: bool, skip: bool) -> None:
 
+    if not os.path.exists(source):
+        logger.error(f"Directory does not exist: {source}")
+        sys.exit()
+
     if genstats:
         generate_report(source)
         return
     else:
+        if not os.path.exists(target):
+            logger.error(f"Directory does not exist: {target}")
+            sys.exit()
         findupes(source, target, skip)
 
     if should_sort:

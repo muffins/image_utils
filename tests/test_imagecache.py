@@ -39,7 +39,6 @@ class TestImageHelper(unittest.TestCase):
     def setUp(self):
         self.ic = ImageHelper("./tests/rick_and_morty.png")
         self.ic.read_image()
-        self.ic.get_image_type()
 
     def test_ih_construction(self):
         self.assertIsInstance(self.ic, ImageHelper)
