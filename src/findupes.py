@@ -175,8 +175,8 @@ if __name__ == "__main__":
         "--sort_images",
         default=False,
         action="store_true",
-        help="When set, sort the images specified with '-d' by year, month, " +
-             "day as extracted from exif metadata on the image.",
+        help="When set, sort the images specified with '-d' by year and " +
+             "as extracted from exif metadata on the image.",
     )
     parser.add_argument(
         "-g",

@@ -51,11 +51,15 @@ class ImageHelper(object):
     magic_buffer = 4096
 
     def __init__(self, full_path: str) -> None:
-        self.full_path = full_path
-        self.filename = os.path.basename(self.full_path)
-        self.size = os.stat(self.full_path).st_size
+        self.full_path: str = full_path
+        self.filename: str = os.path.basename(self.full_path)
+        self.size: int = os.stat(self.full_path).st_size
         self.data = b''
-        self.crc32 = ''
+        self.crc32: str = ''
+        self.ahash: str = ''
+        self.phash: str = ''
+        self.dhash: str = ''
+        self.whash: str = ''
 
     def _check_image_type(self) -> None:
         """
@@ -112,11 +116,16 @@ class ImageHelper(object):
             return
 
         # next, compute the ImageHashes of the file
-        img = Image.open(self.full_path)
-        self.ahash: str = str(imagehash.average_hash(img))
-        self.phash: str = str(imagehash.phash(img))
-        self.dhash: str = str(imagehash.dhash(img))
-        self.whash: str = str(imagehash.whash(img))
+        try:
+            img = Image.open(self.full_path)
+            self.ahash: str = str(imagehash.average_hash(img))
+            self.phash: str = str(imagehash.phash(img))
+            self.dhash: str = str(imagehash.dhash(img))
+            self.whash: str = str(imagehash.whash(img))
+        except Exception as e:
+            logger.warning(
+                f"Failed to compute ImageHash for {self.full_path} with {e}"
+            )
 
     def print_image_details(self) -> None:
         report = {
