@@ -44,23 +44,19 @@ async def generate_report(path: str) -> None:
 async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
     # to an sqlite3 DB, compute hashes and any necessary pieces for checking
-    # if the two images are the same. Then given the target directory, check to
-    # see if the image already exists, if it does to a pprint report about all
-    # potential dupes
+    # if the two images are the same. Then given the target directory, check
+    # to see if the image already exists, if it does to a pprint report 
+    # about all potential dupes
     ic = ImageCache()
     if not skip:
         await ic.gen_cache_from_directory(source)
-
-    logger.info(f"Processing took {ic.processing_time} seconds.")
-    logger.info(f"Encountered {ic.dupe_count} duplicate images:")
-
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(ic.get_dupes())
-
+        logger.info(f"Processing took {ic.processing_time} seconds.")
+    
     logger.info(
-        f"Beginning processing of {target} for potential duplicates. " +
-        "Report will be displayed with duplicates, ambiguous files, and " +
-        "suggested files for copying when finished. This may take a long time."
+        f"Beginning processing of {target} for potential duplicates.\n" +
+        "Report will be displayed with duplicates, ambiguous files,\n" +
+        "and suggested files for copying when finished. This may \n" +
+        "take a long time."
     )
 
     report = {
@@ -73,23 +69,18 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
         logger.info(f"Processing {len(filenames)} files in {root}")
         for f in filenames:
             full: str = os.path.join(root, f)
-            
-            # Check if the file/size exists in the db.
-            row = ic.lookup(
-                f"WHERE filename = '{f}'"
-            )
             image: ImageHelper = ImageHelper(full)
+
+            # Check if the file/size exists in the db.
+            row = ic.lookup(f"WHERE filename = '{f}' AND size = '{image.size}'")
             if len(row) > 0:
-                logger.warning(f"Possible duplicate image found: {full}")
-                logger.warning("Checking CRC32 and MD5 of image. . .")
+
+                # If file and size are the same, grab the crc32 and md5 to verify dupe
+                image.read_image()
                 image.compute_md5()
-                
-                # TODO: Consider swapping this with just size. If a file has 
-                # the same name, and the same size... Odds are it's the same.
-                
                 if row[3] == image.crc32 and row[4] == image.md5:
                     logger.warning(
-                        f"Duplicate image verified, {full} already exists in " +
+                        f"Duplicate image verified: {full} already exists in " +
                         f"{source} at {row[2]}"
                     )
                     report['duplicates'].append(image.full_path)
@@ -102,11 +93,10 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
                     report['ambiguous'].append(image.full_path)
                 continue
 
-            # If no file name check for md5
-
-            # If no md5, check for ahash
+            # Add the file to the list of potentials to migrate
             report['migrate'].append(image.full_path)
     
+    pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(report)
 
 
@@ -151,7 +141,7 @@ if __name__ == "__main__":
              "generating image stats.",
     )
     parser.add_argument(
-        "--skip_cache_gen",
+        "--skip_source_cache_generation",
         action="store_true",
         default=False,
         help="Skips the generation of the source image cache. Use this if you" +
@@ -192,5 +182,5 @@ if __name__ == "__main__":
         args.target, 
         args.genstats, 
         args.sort_images, 
-        args.skip_cache_gen
+        args.skip_source_cache_generation,
     ))

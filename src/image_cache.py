@@ -56,6 +56,7 @@ class ImageHelper(object):
         self.filename: str = os.path.basename(self.full_path)
         self.size: int = os.stat(self.full_path).st_size
         self.data = b''
+        self.md5: str = ''
         self.crc32: str = ''
         self.ahash: str = ''
         self.phash: str = ''
@@ -154,12 +155,10 @@ class ImageCache(object):
                  table_name: str = "image_cache"):
         self.db_name = db_name
         self.db_table = table_name
-        
         self._lock = threading.Lock()
-
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
-
         self.create_table()
+        self.processing_time = 0
         
 
     def create_table(self) -> None:
