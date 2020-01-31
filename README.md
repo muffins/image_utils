@@ -1,6 +1,6 @@
-# finddupes
+# Image Utils
 
-[![Build Status](https://travis-ci.org/muffins/finddupes.svg?branch=master)](https://travis-ci.org/muffins/finddupes)
+[![Build Status](https://travis-ci.org/muffins/image_utils.svg?branch=master)](https://travis-ci.org/muffins/image_utils)
 
 ## About 
 
@@ -20,8 +20,8 @@ already exists.
 ## Usage
 
 ```
-PS C:\Users\Nicholas\work\repos\finddupes> python3 .\src\findupes.py --help
-usage: findupes.py [-h] [-d IMAGE_DIR] [-t TARGET] [-b DATABASE] [-s] [-g]
+PS C:\Users\Nicholas\work\repos\image_utils> python3 .\src\image_utils.py --help
+usage: image_utils.py [-h] [-d IMAGE_DIR] [-t TARGET] [-b DATABASE] [-s] [-g]
 
 optional arguments:
   -h, --help            show this help message and exit

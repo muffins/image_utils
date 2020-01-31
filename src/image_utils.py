@@ -36,7 +36,7 @@ async def generate_report(path: str) -> None:
     for k, v in queries.items():
         report[k] = ic.query(v.format(ic.get_table()))
 
-    pp = pprint.PrettyPrinter(indent=4)
+    pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(report)
     logger.info(f"Processing took {ic.processing_time} seconds.")
     logger.info(f"Encountered {ic.dupe_count} duplicate images.")
