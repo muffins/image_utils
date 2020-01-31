@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import argparse
 import json
 import logging
@@ -18,9 +19,9 @@ logger = logging.getLogger("findupes")
 
 # Takes in a target directory and computes information about
 # the images contained therin
-def generate_report(path: str) -> None:
+async def generate_report(path: str) -> None:
     ic = ImageCache()
-    ic.gen_cache_from_directory(path)
+    await ic.gen_cache_from_directory(path)
 
     report = {}
 
@@ -40,7 +41,7 @@ def generate_report(path: str) -> None:
     logger.info(f"Processing took {ic.processing_time} seconds.")
     logger.info(f"Encountered {ic.dupe_count} duplicate images.")
 
-def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
+async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
     # to an sqlite3 DB, compute hashes and any necessary pieces for checking
     # if the two images are the same. Then given the target directory, check to
@@ -48,7 +49,7 @@ def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     # potential dupes
     ic = ImageCache()
     if not skip:
-        ic.gen_cache_from_directory(source)
+        await ic.gen_cache_from_directory(source)
 
     logger.info(f"Processing took {ic.processing_time} seconds.")
     logger.info(f"Encountered {ic.dupe_count} duplicate images:")
@@ -109,14 +110,14 @@ def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     pp.pprint(report)
 
 
-def sort_images(source: str) -> None:
+async def sort_images(source: str) -> None:
     # TODO:
     # Helper function to read in a directory of pictures and sort them all
     # based off of exif metadata
     pass
 
 
-def main(source: str, target: str, genstats: bool, 
+async def main(source: str, target: str, genstats: bool, 
          should_sort: bool, skip: bool) -> None:
 
     if not os.path.exists(source):
@@ -124,16 +125,16 @@ def main(source: str, target: str, genstats: bool,
         sys.exit()
 
     if genstats:
-        generate_report(source)
+        await generate_report(source)
         return
     else:
         if not os.path.exists(target):
             logger.error(f"Directory does not exist: {target}")
             sys.exit()
-        findupes(source, target, skip)
+        await findupes(source, target, skip)
 
     if should_sort:
-        sort_images(source)
+        await sort_images(source)
 
 
 if __name__ == "__main__":
@@ -186,10 +187,10 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    main(
+    asyncio.run(main(
         args.image_dir, 
         args.target, 
         args.genstats, 
         args.sort_images, 
         args.skip_cache_gen
-    )
+    ))

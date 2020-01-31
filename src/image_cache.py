@@ -216,16 +216,19 @@ class ImageCache(object):
             # and store all of this information in our db
             self.insert(image)
 
-    def gen_cache_from_directory(self, source: str) -> None:
+    async def gen_cache_from_directory(self, source: str) -> None:
         """
         Given a directory generate the image cache for all image files
         """
         start = time.time()
+        tasks = []
         for root, _, filenames in os.walk(source):
             logger.info(f"Processing {len(filenames)} files in {root}")
             for filename in filenames:
                 full: str = os.path.join(root, filename)
-                asyncio.run(self.gen_stats_for_file(full))
+                tasks.append(asyncio.create_task(self.gen_stats_for_file(full)))
+        
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         self.db_conn.commit()
         self.processing_time = int(time.time() - start)
