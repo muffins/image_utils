@@ -3,3 +3,6 @@
 
 # Ignore databases
 image_cache.sqlite
+
+# Ignore any report files generated
+img_util_*

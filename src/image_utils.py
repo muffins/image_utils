@@ -2,6 +2,7 @@
 
 import asyncio
 import argparse
+import datetime
 import json
 import logging
 import os
@@ -13,14 +14,15 @@ from image_cache import ImageCache
 from image_cache import ImageHelper
 from typing import Dict
 
-logging.basicConfig(format="[%(asctime)-15s] %(message)s")
-logger = logging.getLogger("findupes")
+logger = None
+logger_verbosity = False
 
 
 # Takes in a target directory and computes information about
 # the images contained therin
 async def generate_report(path: str) -> None:
-    ic = ImageCache()
+    global logger_verbosity
+    ic = ImageCache(verbose=logger_verbosity)
     await ic.gen_cache_from_directory(path)
 
     report = {}
@@ -47,7 +49,8 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     # if the two images are the same. Then given the target directory, check
     # to see if the image already exists, if it does to a pprint report 
     # about all potential dupes
-    ic = ImageCache()
+    global logger_verbosity
+    ic = ImageCache(verbose=logger_verbosity)
     if not skip:
         await ic.gen_cache_from_directory(source)
         logger.info(f"Processing took {ic.processing_time} seconds.")
@@ -96,8 +99,10 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
             # Add the file to the list of potentials to migrate
             report['migrate'].append(image.full_path)
     
-    pp = pprint.PrettyPrinter(indent=2)
-    pp.pprint(report)
+    tstamp = datetime.datetime.now().strftime("img_util_%Y-%m-%d.json")
+    with open(tstamp, 'w') as fout:
+        pp = pprint.PrettyPrinter(indent=2, stream=fout)
+        pp.pprint(report)
 
 
 async def sort_images(source: str) -> None:
@@ -108,7 +113,7 @@ async def sort_images(source: str) -> None:
 
 
 async def main(source: str, target: str, genstats: bool, 
-         should_sort: bool, skip: bool) -> None:
+               should_sort: bool, skip: bool) -> None:
 
     if not os.path.exists(source):
         logger.error(f"Directory does not exist: {source}")
@@ -175,8 +180,23 @@ if __name__ == "__main__":
         default=False,
         action="store_true"
     )
+    parser.add_argument(
+        "-v",
+        "--verbose", 
+        default=False,
+        action="store_true",
+        help="Increase the verbosity of the run"
+    )
 
     args = parser.parse_args()
+    logging.basicConfig(
+        format="%(asctime)s %(message)s", 
+        datefmt='[%Y-%m-%d %I:%M:%S]',
+        level=logging.DEBUG if args.verbose else logging.INFO,
+    )
+    logger_verbosity = args.verbose
+    logger = logging.getLogger("image_util")
+
     asyncio.run(main(
         args.image_dir, 
         args.target, 

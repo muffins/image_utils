@@ -37,11 +37,7 @@ SUPPORTED_TYPES = set([
     "bmp",
 ])
 
-logging.basicConfig(
-    format="[%(asctime)-15s] %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger("image_cache")
+logger = None
 
 
 class ImageHelper(object):
@@ -62,6 +58,7 @@ class ImageHelper(object):
         self.phash: str = ''
         self.dhash: str = ''
         self.whash: str = ''
+        logger.debug(f"Processing {full_path}. . .")
 
     def _check_image_type(self) -> None:
         """
@@ -151,14 +148,23 @@ class ImageCache(object):
     dupe_count = 0
     duplicates = []
 
-    def __init__(self, db_name: str = "image_cache.sqlite", 
-                 table_name: str = "image_cache"):
+    def __init__(self, 
+                 db_name: str = "image_cache.sqlite", 
+                 table_name: str = "image_cache",
+                 verbose: bool = False):
+        global logger
         self.db_name = db_name
         self.db_table = table_name
         self._lock = threading.Lock()
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
         self.create_table()
         self.processing_time = 0
+
+        logging.basicConfig(
+            format="[%(asctime)-15s] %(message)s",
+            level=logging.DEBUG if verbose else logging.INFO,
+        )
+        logger = logging.getLogger("image_cache")
         
 
     def create_table(self) -> None:
@@ -200,11 +206,10 @@ class ImageCache(object):
         
         # Only insert if it's likely we have not seen this image before
         if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
-            logger.info(
+            logger.debug(
                 "Potential duplicate image found: " + 
                 f"{image.full_path}:{image.crc32}"
             )
-            logger.debug(f"{full}:{image.crc32} already exists in DB, skipping")
             self.dupe_count += 1
             self.duplicates.append(image)
         else:
