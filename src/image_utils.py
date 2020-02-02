@@ -104,6 +104,10 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
         pp = pprint.PrettyPrinter(indent=2, stream=fout)
         pp.pprint(report)
 
+    logger.info("Completed duplicate scan.")
+    logger.info(f"Processing took {ic.processing_time} seconds.")
+    logger.info(f"Encountered {ic.dupe_count} duplicate images.")
+
 
 async def sort_images(source: str) -> None:
     # TODO:
