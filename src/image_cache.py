@@ -48,6 +48,13 @@ class ImageHelper(object):
     magic_buffer = 4096
 
     def __init__(self, full_path: str) -> None:
+        # As its SQL, avoid quotes if possible
+        if "'" in full_path or "\"" in full_path:
+            full_path_old = full_path
+            full_path.replace("'", "")
+            full_path.replace("\"", "")
+            os.rename(full_path_old, full_path)
+
         self.full_path: str = full_path
         self.filename: str = os.path.basename(self.full_path)
         self.size: int = os.stat(self.full_path).st_size
