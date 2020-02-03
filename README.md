@@ -19,6 +19,7 @@ already exists.
 
 ## Usage
 
+Image Utils leverages `argparse`, so you can always use the `-h` flag to print out the full menu of options.
 ```
 PS C:\Users\Nicholas\work\repos\image_utils> python3 .\src\image_utils.py --help
 usage: image_utils.py [-h] [-d IMAGE_DIR] [-t TARGET] [-b DATABASE] [-s] [-g]
@@ -40,3 +41,12 @@ optional arguments:
                         image.
   -g, --genstats
 ```
+
+To have image_utils scan a given directory for duplicate images, use the `-d` and `-t` flag together. Note that you can skip the cache generation with `--skip_source_cache_generation`:
+```
+PS C:\Users\Nicholas\work\repos\image_utils> python3 .\src\image_utils.py -d F:\Library\Nick\Pictures --target="C:\Users\Nicholas\Desktop\Pictures Backup" --skip_source_cache_generation
+```
+
+By default, `image_utils` only uses the file name and size to check if a file
+already exists in the cache. If you'd like to use the crc32 and md5 values of 
+the file to check for dupes, use the `--deep` flag set to `1`

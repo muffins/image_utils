@@ -38,7 +38,7 @@ async def generate_report(path: str) -> None:
     for k, v in queries.items():
         report[k] = ic.query(v.format(ic.get_table()))
 
-    pp = pprint.PrettyPrinter(indent=2)
+    pp = pprint.PrettyPrinter(indent=2, compact=False)
     pp.pprint(report)
     logger.info(f"Processing took {ic.processing_time} seconds.")
     logger.info(f"Encountered {ic.dupe_count} duplicate images.")
@@ -100,8 +100,8 @@ async def findupes(source: str, target: str, skip: bool) -> Dict[str, any]:
             report['migrate'].append(image.full_path)
     
     tstamp = datetime.datetime.now().strftime("img_util_%Y-%m-%d.json")
-    with open(tstamp, 'w') as fout:
-        pp = pprint.PrettyPrinter(indent=2, stream=fout)
+    with open(tstamp, 'w') as fout:w
+        pp = pprint.PrettyPrinter(indent=2, stream=fout, compact=False)
         pp.pprint(report)
 
     logger.info("Completed duplicate scan.")
@@ -162,6 +162,15 @@ if __name__ == "__main__":
         "--target",
         action="store",
         help="The target folder containing potential duplicate images",
+    )
+    parser.add_argument(
+        "--deep",
+        action="store",
+        default=0,
+        type=int,
+        help="How thoroughly to check for dupes. Setting this higher than 0 " + 
+             "will instruct to tool to leverage more intense methods to " + 
+             "check for duplicate images, such as md5 or ImageHashes.",
     )
     parser.add_argument(
         "-b",
