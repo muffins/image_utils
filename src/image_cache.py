@@ -293,6 +293,17 @@ class ImageCache(object):
         ret = db_curr.execute(query).fetchone()
         return [] if ret is None else ret
 
+    def get_count(self, where_clause: str = "") -> List[str]:
+        """
+        Helper sqlite function to fetch the size of the DB
+        """
+        query = f"""
+            SELECT COUNT(id) FROM {self.db_table};
+        """
+        db_curr = self.db_conn.cursor()
+        ret = db_curr.execute(query).fetchone()
+        return 0 if ret is None else ret[0]
+
     def query(self, query: str = "") -> List[str]:
         """
         Helper sqlite function to exec an arbitrary query
