@@ -8,14 +8,23 @@ import logging
 import os
 import pprint
 import sys
+import shutil
 import time
 
 from image_cache import ImageCache
 from image_cache import ImageHelper
+
+from PIL import Image
+from PIL.ExifTags import TAGS
+
 from typing import Dict
 
-logger = None
 logger_verbosity = False
+logging.basicConfig(
+format="%(asctime)s %(message)s", 
+datefmt='[%Y-%m-%d %I:%M:%S]',
+)
+logger = logging.getLogger("image_util")
 
 # Takes in a target directory and computes information about
 # the images contained therin
@@ -128,11 +137,38 @@ async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
         fout.write(json.dumps(report))
     logger.info(f"Report written to {tstamp}")
     
+def get_exif(img_path: str) -> Dict[str, str]:
+    image = Image.open(img_path)
+    exif = {}
+    img_exif = image._getexif()
+    if img_exif is not None:
+        for (k, v) in img_exif.items():
+            exif[TAGS.get(k)] = v
+    return exif
+
 async def sort_images(source: str, dest: str) -> None:
-    # TODO:
     # Helper function to read in a directory of pictures and sort them all
-    # based off of exif metadata
-    pass
+    # based off of exif metadata. By default the sorting happens by /YYYY/MM
+    global logger_verbosity
+
+    for root, _, filenames in os.walk(source):
+        if logger_verbosity:
+            logger.info(f"Processing {len(filenames)} files in {root}")
+        for f in filenames:
+            full = os.path.join(root, f)
+            exif = get_exif(full)
+            if exif == {}:
+                logger.warning(f"Failed to find exif data for {full}")
+                continue
+
+            dt = time.strptime(exif['DateTimeOriginal'], '%Y:%m:%d %H:%M:%S')
+            new_dest = os.path.join(dest, str(dt.tm_year), str(dt.tm_mon))
+            if not os.path.exists(new_dest):
+                os.makedirs(new_dest)
+
+            # Copy the file, including metadata
+            shutil.copy(full, os.path.join(new_dest, f))
+            shutil.copystat(full, os.path.join(new_dest, f))
 
 async def main(source: str, target: str, genstats: bool, 
                should_sort: bool, skip: bool) -> None:

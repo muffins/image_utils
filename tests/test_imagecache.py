@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import os
+import shutil
 import sys
+import tempfile
 
 import unittest
 
@@ -15,6 +17,7 @@ sys.path.insert(
         )
     )
 )
+
 from image_cache import ImageCache
 from image_cache import ImageHelper
 
@@ -37,8 +40,16 @@ class TestImageCache(unittest.TestCase):
 class TestImageHelper(unittest.TestCase):
 
     def setUp(self):
-        self.ic = ImageHelper("./tests/rick_and_morty.png")
+        self.rnm1 = "./tests/img/rick_and_morty_1.png"
+        self.rnm2 = "./tests/img/rick_and_morty_2.png"
+
+        self.ic = ImageHelper(self.rnm1)
         self.ic.read_image()
+
+        self.tmpdir = tempfile.gettempdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
 
     def test_ih_construction(self):
         self.assertIsInstance(self.ic, ImageHelper)
@@ -80,6 +91,10 @@ class TestImageHelper(unittest.TestCase):
         self.assertEqual(self.ic.dhash, "cbd6908193dadada")
         self.assertIsInstance(self.ic.whash, str)
         self.assertEqual(self.ic.whash, "00007cfcfc686fee")
+
+    def test_sort_images(self):
+
+        
 
 
 if __name__ == '__main__':
