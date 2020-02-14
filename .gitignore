@@ -3,6 +3,7 @@
 
 # Ignore databases
 image_cache.sqlite
+*-journal
 
 # Ignore any report files generated
 img_util_*

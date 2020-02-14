@@ -28,9 +28,9 @@ logger = logging.getLogger("image_util")
 
 # Takes in a target directory and computes information about
 # the images contained therin
-async def gen_database(path: str) -> None:
+async def gen_database(path: str, fast: bool) -> None:
     global logger_verbosity
-    ic = ImageCache(verbose=logger_verbosity)
+    ic = ImageCache(verbose=logger_verbosity, fast=fast)
     await ic.gen_cache_from_directory(path)
 
     report = {}
@@ -46,7 +46,7 @@ async def gen_database(path: str) -> None:
     for k, v in queries.items():
         report[k] = ic.query(v.format(ic.get_table()))
 
-    report['duplicates'] = ic.get_dupes()
+    report['duplicates'] = [x.full_path for x in ic.get_dupes()]
 
     if logger_verbosity:
         pp = pprint.PrettyPrinter(indent=2, compact=False)
@@ -63,14 +63,14 @@ async def gen_database(path: str) -> None:
         fout.write(json.dumps(report))
     logger.info(f"Report written to {tstamp}")
 
-async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
+async def find_dupes(source: str, target: str, skip: bool, fast: bool) -> Dict[str, any]:
     # Use the Image Cache helper class to read in the source directory
     # to an sqlite3 DB, compute hashes and any necessary pieces for checking
     # if the two images are the same. Then given the target directory, check
     # to see if the image already exists, if it does to a pprint report 
     # about all potential dupes
     global logger_verbosity
-    ic = ImageCache(verbose=logger_verbosity)
+    ic = ImageCache(verbose=logger_verbosity, fast=fast)
     if not skip:
         await ic.gen_cache_from_directory(source)
         logger.info(f"Processing took {ic.processing_time} seconds.")
@@ -171,22 +171,25 @@ async def sort_images(source: str, dest: str) -> None:
             shutil.copystat(full, os.path.join(new_dest, f))
 
 async def main(source: str, target: str, genstats: bool, 
-               should_sort: bool, skip: bool) -> None:
-
+               should_sort: bool, skip: bool, fast: bool) -> None:
+    
     if not os.path.exists(source):
         logger.error(f"Directory does not exist: {source}")
         sys.exit()
 
+    # TODO: Might be able to immediate declare/make an ImageCache, as
+    # everyone already takes the `source` dir...
+
     if should_sort:
         await sort_images(source, target)
     elif genstats:
-        await gen_database(source)
+        await gen_database(source, fast)
         return
     else:
         if not os.path.exists(target):
             logger.error(f"Directory does not exist: {target}")
             sys.exit()
-        await find_dupes(source, target, skip)
+        await find_dupes(source, target, skip, fast)
 
 
 if __name__ == "__main__":
@@ -228,13 +231,13 @@ if __name__ == "__main__":
         help="Increase the verbosity of the run"
     )
     parser.add_argument(
-        "--deep",
-        action="store",
-        default=0,
-        type=int,
-        help="How thoroughly to check for dupes. Setting this higher than 0 " + 
-             "will instruct to tool to leverage more intense methods to " + 
-             "check for duplicate images, such as md5 or ImageHashes.",
+        "--fast",
+        action="store_true",
+        default=False,
+        help="Fast mode prevents ImageUtils from checking MIME types and " +
+             "computing ImageHash values to check for duplicates. Use this " +
+             "option if you have more than just images, or you don't care " + 
+             "about images that are nearly the same.",
     )
     parser.add_argument(
         "--database",
@@ -267,4 +270,5 @@ if __name__ == "__main__":
         args.genstats, 
         args.sort_images, 
         args.skip_cache_gen,
+        args.fast,
     ))

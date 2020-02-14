@@ -87,6 +87,11 @@ class ImageHelper(object):
         A helper function that reads the image one block at a time. We do this
         to compute the CRC32 as we go, which is used for 'Fast' dupe checking
         """
+        # We've already read the file, don't do it again
+        if self.crc32 is not '' and self.data is not b'':
+            logger.warning("File already processed, skipping duplicate read")
+            return 
+
         crc32 = 0
         with open(self.full_path, "rb") as fin:
             while True:
@@ -155,10 +160,11 @@ class ImageCache(object):
     dupe_count = 0
     duplicates = []
 
-    def __init__(self, 
-                 db_name: str = "image_cache.sqlite", 
+    def __init__(self,
+                 db_name: str = "image_cache.sqlite",
                  table_name: str = "image_cache",
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 fast: bool = False):
         global logger
         self.db_name = db_name
         self.db_table = table_name
@@ -166,6 +172,7 @@ class ImageCache(object):
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
         self.create_table()
         self.processing_time = 0
+        self.fast = fast
 
         logging.basicConfig(
             format="[%(asctime)-15s] %(message)s",
@@ -207,12 +214,22 @@ class ImageCache(object):
     async def gen_stats_for_file(self, full: str) -> Dict[str, any]:
 
         image = ImageHelper(full)
-        image.read_image()
-        if not image.is_image:
-            return
+        
+        # If we're not computing fast, grab the CRC32 now.
+        if not self.fast:
+            image.read_image()
+            if not image.is_image:
+                return
         
         # Only insert if it's likely we have not seen this image before
-        if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
+        where = f"WHERE filename = '{image.filename}' AND size = '{image.size}'"
+        row = self.lookup(where)
+        if len(row) > 0:
+            # TODO: Check the CRC32/MD5 is the same after verifying name and size
+            # if not self.fast:
+            # if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
+            # crc = row[]
+            logger.info(row)
             logger.debug(
                 "Potential duplicate image found: " + 
                 f"{image.full_path}:{image.crc32}"
@@ -221,6 +238,7 @@ class ImageCache(object):
             self.duplicates.append(image)
         else:
             # Compute the heavy lifting for the image
+            image.read_image()
             image.compute_md5()
             image.compute_image_hashes()
             
