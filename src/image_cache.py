@@ -75,9 +75,6 @@ class ImageHelper(object):
         # first verify the file is of an image mime type
         imagic: set = set([x for x in self.img_type.split()])
         if len(imagic.intersection(SUPPORTED_TYPES)) == 0:
-            logger.error(
-                f"File not an image: {self.full_path}, MIME: {self.img_type}"
-            )
             self.is_image = False
         else:
             self.is_image = True
@@ -159,6 +156,7 @@ class ImageCache(object):
 
     dupe_count = 0
     duplicates = []
+    ambiguous = []
 
     def __init__(self,
                  db_name: str = "image_cache.sqlite",
@@ -225,18 +223,24 @@ class ImageCache(object):
         where = f"WHERE filename = '{image.filename}' AND size = '{image.size}'"
         row = self.lookup(where)
         if len(row) > 0:
-            # TODO: Check the CRC32/MD5 is the same after verifying name and size
-            # if not self.fast:
-            # if len(self.lookup(f"where crc32 = '{image.crc32}'")) > 0:
-            # crc = row[]
             logger.info(row)
-            logger.debug(
+            logger.info(
                 "Potential duplicate image found: " + 
-                f"{image.full_path}:{image.crc32}"
+                f"{image.full_path}:{image.crc32} has same size/name as" + 
+                f"" # TODO: Fill this in with Row data
             )
             self.dupe_count += 1
             self.duplicates.append(image)
         else:
+            where = f"WHERE crc32 = '{image.crc32}'"
+            row = self.lookup(where)
+            if len(row) > 0:
+                logger.info(
+                    "Duplicate crc32 found: " + 
+                    f"{image.full_path}:{image.crc32} has same size/name as" + 
+                    f"" # TODO: Fill this in with Row data
+                )
+            self.ambiguous.append(image)
             # Compute the heavy lifting for the image
             image.read_image()
             image.compute_md5()
@@ -293,8 +297,11 @@ class ImageCache(object):
     def get_table(self) -> str:
         return self.db_table
 
-    def get_dupes(self) -> List[ImageHelper]:
+    def get_duplicates(self) -> List[ImageHelper]:
         return self.duplicates
+    
+    def get_ambiguous(self) -> List[ImageHelper]:
+        return self.ambiguous
 
     def lookup(self, where_clause: str = "") -> List[str]:
         """

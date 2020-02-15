@@ -46,7 +46,9 @@ async def gen_database(path: str, fast: bool) -> None:
     for k, v in queries.items():
         report[k] = ic.query(v.format(ic.get_table()))
 
-    report['duplicates'] = [x.full_path for x in ic.get_dupes()]
+    # Get duplicate and ambiguous images
+    report['duplicates'] = [x.full_path for x in ic.get_duplicates()]
+    report['ambiguous'] = [x.full_path for x in ic.get_ambiguous()]
 
     if logger_verbosity:
         pp = pprint.PrettyPrinter(indent=2, compact=False)
