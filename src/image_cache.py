@@ -48,6 +48,7 @@ class ImageHelper(object):
     magic_buffer = 4096
 
     def __init__(self, full_path: str) -> None:
+        global logger
         # As its SQL, avoid quotes if possible
         if "'" in full_path or "\"" in full_path:
             full_path_old = full_path
@@ -59,19 +60,21 @@ class ImageHelper(object):
         self.filename: str = os.path.basename(self.full_path)
         self.size: int = os.stat(self.full_path).st_size
         self.data = b''
+        self.has_been_read = False
         self.md5: str = ''
         self.crc32: str = ''
         self.ahash: str = ''
         self.phash: str = ''
         self.dhash: str = ''
         self.whash: str = ''
+        self.img_type: str = ''
         logger.debug(f"Processing {full_path}. . .")
 
-    def _check_image_type(self) -> None:
+    def check_image_type(self) -> None:
         """
         A helper to process the Magic MIME type from the buffer
         """
-        self.img_type = magic.from_buffer(self.data[:self.magic_buffer]).lower()
+        self.img_type = magic.from_file(self.full_path).lower()
         # first verify the file is of an image mime type
         imagic: set = set([x for x in self.img_type.split()])
         if len(imagic.intersection(SUPPORTED_TYPES)) == 0:
@@ -84,8 +87,9 @@ class ImageHelper(object):
         A helper function that reads the image one block at a time. We do this
         to compute the CRC32 as we go, which is used for 'Fast' dupe checking
         """
+        global logger
         # We've already read the file, don't do it again
-        if self.crc32 is not '' and self.data is not b'':
+        if self.has_been_read:
             logger.warning("File already processed, skipping duplicate read")
             return 
 
@@ -98,10 +102,7 @@ class ImageHelper(object):
                 self.data += data
                 crc32 = zlib.crc32(data, crc32)
         self.crc32 = f"{crc32:08x}"
-        
-        # After reading in the full file, compute the image type and check
-        # if it's supported
-        self._check_image_type()
+        self.has_been_read = True
 
     def compute_md5(self) -> None:
         """
@@ -115,7 +116,7 @@ class ImageHelper(object):
         We use ImageHash values to help us identify if we've already seen this 
         file with higher levels of certainty
         """
-
+        global logger
         if not self.is_image:
             logger.warning(
                 "Attempted to compute image hashes on non-image: " +
@@ -160,9 +161,7 @@ class ImageCache(object):
 
     def __init__(self,
                  db_name: str = "image_cache.sqlite",
-                 table_name: str = "image_cache",
-                 verbose: bool = False,
-                 fast: bool = False):
+                 table_name: str = "image_cache"):
         global logger
         self.db_name = db_name
         self.db_table = table_name
@@ -170,11 +169,11 @@ class ImageCache(object):
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
         self.create_table()
         self.processing_time = 0
-        self.fast = fast
 
         logging.basicConfig(
+
             format="[%(asctime)-15s] %(message)s",
-            level=logging.DEBUG if verbose else logging.INFO,
+            level=logging.INFO,
         )
         logger = logging.getLogger("image_cache")
         
@@ -210,20 +209,16 @@ class ImageCache(object):
         self.db_conn.close()
 
     async def gen_stats_for_file(self, full: str) -> Dict[str, any]:
-
+        global logger
         image = ImageHelper(full)
-        
-        # If we're not computing fast, grab the CRC32 now.
-        if not self.fast:
-            image.read_image()
-            if not image.is_image:
-                return
+        image.check_image_type()
+        if not image.is_image:
+            return
         
         # Only insert if it's likely we have not seen this image before
         where = f"WHERE filename = '{image.filename}' AND size = '{image.size}'"
         row = self.lookup(where)
         if len(row) > 0:
-            logger.info(row)
             logger.info(
                 "Potential duplicate image found: " + 
                 f"{image.full_path}:{image.crc32} has same size/name as" + 
@@ -231,7 +226,14 @@ class ImageCache(object):
             )
             self.dupe_count += 1
             self.duplicates.append(image)
+
+            # TODO: Currently, if a file has the same name/size, we consider
+            # it a duplicate and do not process this file. In the future, I'll
+            # introduce a 'deep' concept that will compute ImageHash values and
+            # use these to check if the image exists
+            return
         else:
+            image.read_image()
             where = f"WHERE crc32 = '{image.crc32}'"
             row = self.lookup(where)
             if len(row) > 0:
@@ -240,19 +242,27 @@ class ImageCache(object):
                     f"{image.full_path}:{image.crc32} has same size/name as" + 
                     f"" # TODO: Fill this in with Row data
                 )
-            self.ambiguous.append(image)
-            # Compute the heavy lifting for the image
+                self.ambiguous.append(image)
+                return
+
+        # This is precautionary, as our `read_image` happens inside of a
+        # conditional, I'd rather ensure we've read in the data before getting
+        # the digests, but this should rarely, if ever, happen.
+        if not image.has_been_read:
             image.read_image()
-            image.compute_md5()
-            image.compute_image_hashes()
-            
-            # and store all of this information in our db
-            self.insert(image)
+
+        # Compute the heavy lifting for the image
+        image.compute_md5()
+        image.compute_image_hashes()
+        
+        # and store all of this information in our db
+        self.insert(image)
 
     async def gen_cache_from_directory(self, source: str) -> None:
         """
         Given a directory generate the image cache for all image files
         """
+        global logger
         start = time.time()
         tasks = []
         for root, _, filenames in os.walk(source):
