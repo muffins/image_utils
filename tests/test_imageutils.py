@@ -33,13 +33,16 @@ def async_test(coro):
 class TestImageUtils(unittest.TestCase):
 
     def setUp(self):
-        self.tmpdir = tempfile.TemporaryDirectory(prefix="image-utils-")
+        self.tmpdir = tempfile.mkdtemp(prefix='iu-tests')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
     
     @async_test
     async def test_sort_images(self):
-        await sort_images('./tests/img', self.tmpdir.name)
+        await sort_images('./tests/img', self.tmpdir)
 
-        for root, _, filenames in os.walk(self.tmpdir.name):
+        for root, _, filenames in os.walk(self.tmpdir):
             for f in filenames:
                 print(os.path.join(root, f))
 

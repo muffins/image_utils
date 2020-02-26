@@ -37,7 +37,11 @@ SUPPORTED_TYPES = set([
     "bmp",
 ])
 
-logger = None
+logging.basicConfig(
+    format="[%(asctime)-15s] %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger("image_cache")
 
 
 class ImageHelper(object):
@@ -48,7 +52,6 @@ class ImageHelper(object):
     magic_buffer = 4096
 
     def __init__(self, full_path: str) -> None:
-        global logger
         # As its SQL, avoid quotes if possible
         if "'" in full_path or "\"" in full_path:
             full_path_old = full_path
@@ -68,6 +71,7 @@ class ImageHelper(object):
         self.dhash: str = ''
         self.whash: str = ''
         self.img_type: str = ''
+        self.is_image = False
         logger.debug(f"Processing {full_path}. . .")
 
     def check_image_type(self) -> None:
@@ -87,7 +91,6 @@ class ImageHelper(object):
         A helper function that reads the image one block at a time. We do this
         to compute the CRC32 as we go, which is used for 'Fast' dupe checking
         """
-        global logger
         # We've already read the file, don't do it again
         if self.has_been_read:
             logger.warning("File already processed, skipping duplicate read")
@@ -116,7 +119,6 @@ class ImageHelper(object):
         We use ImageHash values to help us identify if we've already seen this 
         file with higher levels of certainty
         """
-        global logger
         if not self.is_image:
             logger.warning(
                 "Attempted to compute image hashes on non-image: " +
@@ -156,27 +158,20 @@ class ImageHelper(object):
 class ImageCache(object):
 
     dupe_count = 0
-    duplicates = []
-    ambiguous = []
+    # Dupes and Ambiguous are lists of dicts, indicating the original file
+    # and the file which is considered to be a duplicate
+    duplicates: List[Dict[str, str]] = []
+    ambiguous: List[Dict[str, str]] = []
 
     def __init__(self,
                  db_name: str = "image_cache.sqlite",
                  table_name: str = "image_cache"):
-        global logger
         self.db_name = db_name
         self.db_table = table_name
         self._lock = threading.Lock()
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
         self.create_table()
         self.processing_time = 0
-
-        logging.basicConfig(
-
-            format="[%(asctime)-15s] %(message)s",
-            level=logging.INFO,
-        )
-        logger = logging.getLogger("image_cache")
-        
 
     def create_table(self) -> None:
         """
@@ -209,7 +204,7 @@ class ImageCache(object):
         self.db_conn.close()
 
     async def gen_stats_for_file(self, full: str) -> Dict[str, any]:
-        global logger
+
         image = ImageHelper(full)
         image.check_image_type()
         if not image.is_image:
@@ -221,11 +216,13 @@ class ImageCache(object):
         if len(row) > 0:
             logger.info(
                 "Potential duplicate image found: " + 
-                f"{image.full_path}:{image.crc32} has same size/name as" + 
-                f"" # TODO: Fill this in with Row data
+                f"{image.full_path}:{image.crc32} has same size/name as " + 
+                f"{row[2]}:{row[3]}"
             )
             self.dupe_count += 1
-            self.duplicates.append(image)
+            self.duplicates.append(
+                {'original': row[2], 'duplicate': image.full_path}
+            )
 
             # TODO: Currently, if a file has the same name/size, we consider
             # it a duplicate and do not process this file. In the future, I'll
@@ -240,9 +237,11 @@ class ImageCache(object):
                 logger.info(
                     "Duplicate crc32 found: " + 
                     f"{image.full_path}:{image.crc32} has same size/name as" + 
-                    f"" # TODO: Fill this in with Row data
+                    f"{row[2]}:{row[3]}"
                 )
-                self.ambiguous.append(image)
+                self.ambiguous.append(
+                    {'original': row[2], 'duplicate': image.full_path}
+                )
                 return
 
         # This is precautionary, as our `read_image` happens inside of a
@@ -262,7 +261,6 @@ class ImageCache(object):
         """
         Given a directory generate the image cache for all image files
         """
-        global logger
         start = time.time()
         tasks = []
         for root, _, filenames in os.walk(source):
@@ -307,10 +305,10 @@ class ImageCache(object):
     def get_table(self) -> str:
         return self.db_table
 
-    def get_duplicates(self) -> List[ImageHelper]:
+    def get_duplicates(self) -> List[Dict[str, str]]:
         return self.duplicates
-    
-    def get_ambiguous(self) -> List[ImageHelper]:
+
+    def get_ambiguous(self) -> List[Dict[str, str]]:
         return self.ambiguous
 
     def lookup(self, where_clause: str = "") -> List[str]:

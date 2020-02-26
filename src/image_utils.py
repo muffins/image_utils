@@ -19,17 +19,20 @@ from PIL.ExifTags import TAGS
 
 from typing import Dict
 
-logger_verbosity = False
+# Setup a logger
 logging.basicConfig(
-format="%(asctime)s %(message)s", 
-datefmt='[%Y-%m-%d %I:%M:%S]',
+    format="[%(asctime)s] %(message)s",
+    datefmt='[%Y-%m-%d %I:%M:%S]',
+    level=logging.INFO,
 )
 logger = logging.getLogger("image_util")
 
-# Takes in a target directory and computes information about
-# the images contained therin
+
 async def gen_database(path: str) -> None:
-    global logger_verbosity
+    """
+    Takes in a target directory and computes information about
+    the images contained therin
+    """
     ic = ImageCache()
     await ic.gen_cache_from_directory(path)
 
@@ -44,15 +47,15 @@ async def gen_database(path: str) -> None:
     }
 
     for k, v in queries.items():
-        report[k] = ic.query(v.format(ic.get_table()))
+        rows = ic.query(v.format(ic.get_table()))
+        report[k] = rows[0][0]
 
     # Get duplicate and ambiguous images
-    report['duplicates'] = [x.full_path for x in ic.get_duplicates()]
-    report['ambiguous'] = [x.full_path for x in ic.get_ambiguous()]
+    report['duplicates'] = ic.get_duplicates()
+    report['ambiguous'] = ic.get_ambiguous()
 
-    if logger_verbosity:
-        pp = pprint.PrettyPrinter(indent=2, compact=False)
-        pp.pprint(report)
+    pp = pprint.PrettyPrinter(indent=2, compact=False)
+    pp.pprint(report)
 
     logger.info("Completed database generation.")
     logger.info(
@@ -66,12 +69,13 @@ async def gen_database(path: str) -> None:
     logger.info(f"Report written to {tstamp}")
 
 async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
-    # Use the Image Cache helper class to read in the source directory
-    # to an sqlite3 DB, compute hashes and any necessary pieces for checking
-    # if the two images are the same. Then given the target directory, check
-    # to see if the image already exists, if it does to a pprint report 
-    # about all potential dupes
-    global logger_verbosity
+    """
+    Use the Image Cache helper class to read in the source directory
+    to an sqlite3 DB, compute hashes and any necessary pieces for checking
+    if the two images are the same. Then given the target directory, check
+    to see if the image already exists, if it does to a pprint report 
+    about all potential dupes
+    """
     ic = ImageCache()
     if not skip:
         await ic.gen_cache_from_directory(source)
@@ -121,9 +125,8 @@ async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
             # Add the file to the list of potentials to migrate
             report['migrate'].append(image.full_path)
 
-    if logger_verbosity:
-        pp = pprint.PrettyPrinter(indent=2, compact=False)
-        pp.pprint(report)
+    pp = pprint.PrettyPrinter(indent=2, compact=False)
+    pp.pprint(report)
 
     logger.info("Completed duplicate scan.")
     logger.info(
@@ -151,13 +154,18 @@ def get_exif(img_path: str) -> Dict[str, str]:
 async def sort_images(source: str, dest: str) -> None:
     # Helper function to read in a directory of pictures and sort them all
     # based off of exif metadata. By default the sorting happens by /YYYY/MM
-    global logger_verbosity
-
     for root, _, filenames in os.walk(source):
-        if logger_verbosity:
-            logger.info(f"Processing {len(filenames)} files in {root}")
+        logger.info(f"Processing {len(filenames)} files in {root}")
         for f in filenames:
             full = os.path.join(root, f)
+            # Use an ImageHelper for convenience
+            ic = ImageHelper(full)
+            ic.check_image_type()
+            if not ic.is_image:
+                logger.warning(
+                    f"Encountered file which is not an image: {ic.full_path}"
+                )
+                continue
             exif = get_exif(full)
             if exif == {}:
                 logger.warning(f"Failed to find exif data for {full}")
@@ -226,13 +234,6 @@ if __name__ == "__main__":
         action="store_true"
     )
     parser.add_argument(
-        "-v",
-        "--verbose", 
-        default=False,
-        action="store_true",
-        help="Increase the verbosity of the run"
-    )
-    parser.add_argument(
         "--database",
         action="store",
         help="Optional path where the ImageCache database should be stored. " + 
@@ -246,15 +247,6 @@ if __name__ == "__main__":
              "as extracted from exif metadata on the image.",
     )
     args = parser.parse_args()
-
-    # Setup a logger
-    logging.basicConfig(
-        format="%(asctime)s %(message)s", 
-        datefmt='[%Y-%m-%d %I:%M:%S]',
-        level=logging.DEBUG if args.verbose else logging.INFO,
-    )
-    logger_verbosity = args.verbose
-    logger = logging.getLogger("image_util")
 
     # TODO: Use args/kwargs :P
     asyncio.run(main(
