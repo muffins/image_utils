@@ -164,14 +164,16 @@ class ImageCache(object):
     ambiguous: List[Dict[str, str]] = []
 
     def __init__(self,
-                 db_name: str = "image_cache.sqlite",
-                 table_name: str = "image_cache"):
+                 db_name: str = "image_cache.s  qlite",
+                 table_name: str = "image_cache",
+                 fast: bool = False):
         self.db_name = db_name
         self.db_table = table_name
         self._lock = threading.Lock()
         self.db_conn = sqlite3.connect(self.db_name, check_same_thread=False)
         self.create_table()
         self.processing_time = 0
+        self.fast = fast
 
     def create_table(self) -> None:
         """
@@ -210,36 +212,56 @@ class ImageCache(object):
         if not image.is_image:
             return
         
-        # Only insert if it's likely we have not seen this image before
-        where = f"WHERE filename = '{image.filename}' AND size = '{image.size}'"
-        row = self.lookup(where)
-        if len(row) > 0:
-            logger.info(
-                "Potential duplicate image found: " + 
-                f"{image.full_path}:{image.crc32} has same size/name as " + 
-                f"{row[2]}:{row[3]}"
-            )
-            self.dupe_count += 1
-            self.duplicates.append(
-                {'original': row[2], 'duplicate': image.full_path}
-            )
-
-            # TODO: Currently, if a file has the same name/size, we consider
-            # it a duplicate and do not process this file. In the future, I'll
-            # introduce a 'deep' concept that will compute ImageHash values and
-            # use these to check if the image exists
-            return
-        else:
-            image.read_image()
-            where = f"WHERE crc32 = '{image.crc32}'"
+        # If 'fast', just check for filename and size, ambiguous will still 
+        # check for crc32. If not fast, use the md5 value to search
+        if self.fast:
+            # Only insert if it's likely we have not seen this image before
+            where = f"WHERE filename = '{image.filename}' AND size = '{image.size}'"
             row = self.lookup(where)
             if len(row) > 0:
                 logger.info(
-                    "Duplicate crc32 found: " + 
-                    f"{image.full_path}:{image.crc32} has same size/name as" + 
+                    "Potential duplicate image found: " + 
+                    f"{image.full_path}:{image.crc32} has same size/name as " + 
                     f"{row[2]}:{row[3]}"
                 )
-                self.ambiguous.append(
+                self.dupe_count += 1
+                self.duplicates.append(
+                    {'original': row[2], 'duplicate': image.full_path}
+                )
+
+                # TODO: Currently, if a file has the same name/size, we consider
+                # it a duplicate and do not process this file. In the future, I'll
+                # introduce a 'deep' concept that will compute ImageHash values and
+                # use these to check if the image exists
+                return
+            else:
+                image.read_image()
+                where = f"WHERE crc32 = '{image.crc32}'"
+                row = self.lookup(where)
+                if len(row) > 0:
+                    logger.info(
+                        "Duplicate crc32 found: " + 
+                        f"{image.full_path}:{image.crc32} has same size/name as" + 
+                        f"{row[2]}:{row[3]}"
+                    )
+                    self.ambiguous.append(
+                        {'original': row[2], 'duplicate': image.full_path}
+                    )
+                    return
+        else:
+            # The default behavior is to compe the MD5 of the image and use this
+            # to check for image duplication
+            image.read_image()
+            image.compute_md5()
+            where = f"WHERE md5 = '{image.md5}'"
+            row = self.lookup(where)
+            if len(row) > 0:
+                logger.info(
+                    "Duplicate md5 found: " + 
+                    f"{image.full_path}:{image.md5} has same size/name as" + 
+                    f"{row[2]}:{row[4]}"
+                )
+                self.duplicates.append(
                     {'original': row[2], 'duplicate': image.full_path}
                 )
                 return

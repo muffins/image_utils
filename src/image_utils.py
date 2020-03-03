@@ -28,12 +28,12 @@ logging.basicConfig(
 logger = logging.getLogger("image_util")
 
 
-async def gen_database(path: str) -> None:
+async def gen_database(path: str, fast: bool) -> None:
     """
     Takes in a target directory and computes information about
     the images contained therin
     """
-    ic = ImageCache()
+    ic = ImageCache(fast=fast)
     await ic.gen_cache_from_directory(path)
 
     report = {}
@@ -53,6 +53,7 @@ async def gen_database(path: str) -> None:
     # Get duplicate and ambiguous images
     report['duplicates'] = ic.get_duplicates()
     report['ambiguous'] = ic.get_ambiguous()
+    report["process_time"] = ic.processing_time
 
     pp = pprint.PrettyPrinter(indent=2, compact=False)
     pp.pprint(report)
@@ -68,7 +69,7 @@ async def gen_database(path: str) -> None:
         fout.write(json.dumps(report))
     logger.info(f"Report written to {tstamp}")
 
-async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
+async def find_dupes(source: str, target: str, skip: bool, fast: bool) -> Dict[str, any]:
     """
     Use the Image Cache helper class to read in the source directory
     to an sqlite3 DB, compute hashes and any necessary pieces for checking
@@ -76,7 +77,7 @@ async def find_dupes(source: str, target: str, skip: bool) -> Dict[str, any]:
     to see if the image already exists, if it does to a pprint report 
     about all potential dupes
     """
-    ic = ImageCache()
+    ic = ImageCache(fast=fast)
     if not skip:
         await ic.gen_cache_from_directory(source)
         logger.info(f"Processing took {ic.processing_time} seconds.")
@@ -181,7 +182,7 @@ async def sort_images(source: str, dest: str) -> None:
             shutil.copystat(full, os.path.join(new_dest, f))
 
 async def main(source: str, target: str, genstats: bool, 
-               should_sort: bool, skip: bool) -> None:
+               should_sort: bool, skip: bool, fast: bool) -> None:
     
     if not os.path.exists(source):
         logger.error(f"Directory does not exist: {source}")
@@ -189,17 +190,16 @@ async def main(source: str, target: str, genstats: bool,
 
     # TODO: Might be able to immediate declare/make an ImageCache, as
     # everyone already takes the `source` dir...
-
     if should_sort:
         await sort_images(source, target)
     elif genstats:
-        await gen_database(source)
+        await gen_database(source, fast)
         return
     else:
         if not os.path.exists(target):
             logger.error(f"Directory does not exist: {target}")
             sys.exit()
-        await find_dupes(source, target, skip)
+        await find_dupes(source, target, skip, fast)
 
 
 if __name__ == "__main__":
@@ -246,6 +246,12 @@ if __name__ == "__main__":
         help="When set, sort the images specified with '-d' by year and " +
              "as extracted from exif metadata on the image.",
     )
+    parser.add_argument(
+        "-f",
+        "--fast", 
+        default=False,
+        action="store_true"
+    )
     args = parser.parse_args()
 
     # TODO: Use args/kwargs :P
@@ -255,4 +261,5 @@ if __name__ == "__main__":
         args.genstats, 
         args.sort_images, 
         args.skip_cache_gen,
+        args.fast,
     ))
