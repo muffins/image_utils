@@ -83,10 +83,10 @@ async def find_dupes(source: str, target: str, skip: bool, fast: bool) -> Dict[s
         logger.info(f"Processing took {ic.processing_time} seconds.")
     
     logger.info(
-        f"Beginning processing of {target} for potential duplicates.\n" +
-        "Report will be displayed with duplicates, ambiguous files,\n" +
-        "and suggested files for copying when finished. This may \n" +
-        "take a long time."
+        f"Beginning processing of {target} for potential duplicates. " +
+        "Report will be displayed with duplicates, ambiguous files, " +
+        "and suggested files for copying when finished. This may take a " +
+        "long time."
     )
 
     report = {
@@ -100,28 +100,34 @@ async def find_dupes(source: str, target: str, skip: bool, fast: bool) -> Dict[s
         for f in filenames:
             full: str = os.path.join(root, f)
             image: ImageHelper = ImageHelper(full)
+            image.check_image_type()
+            if not image.is_image:
+                continue
+
+            image.read_image()
+            image.compute_md5()
 
             # Check if the file/size exists in the db.
-            row = ic.lookup(f"WHERE filename = '{f}' AND size = '{image.size}'")
+            row = ic.lookup(f"WHERE md5 = '{image.md5}'")
             if len(row) > 0:
 
                 # If file and size are the same, grab the crc32 and md5 to verify dupe
-                image.read_image()
-                image.compute_md5()
-                if row[3] == image.crc32 and row[4] == image.md5:
-                    logger.warning(
+                logger.warning(
                         f"Duplicate image verified: {full} already exists in " + 
                         f"at {row[2]}"
                     )
-                    report['duplicates'].append(image.full_path)
-                else:
+                report['duplicates'].append(image.full_path)
+                continue
+            else:
+                row = ic.lookup(f"WHERE crc32 = '{image.crc32}' and size = '{image.size}'")
+                if len(row) > 0:
                     logger.warning(
                         f"Ambiguous files detected. {full} has same size and " +
-                        f"name as source directory file {row[2]}, but md5 or " +
-                        "crc32 do not match."
+                        f"crc32 as source directory file {row[2]}, but md5 " +
+                        "does not match."
                     )
                     report['ambiguous'].append(image.full_path)
-                continue
+                    continue
 
             # Add the file to the list of potentials to migrate
             report['migrate'].append(image.full_path)

@@ -164,7 +164,7 @@ class ImageCache(object):
     ambiguous: List[Dict[str, str]] = []
 
     def __init__(self,
-                 db_name: str = "image_cache.s  qlite",
+                 db_name: str = "image_cache.sqlite",
                  table_name: str = "image_cache",
                  fast: bool = False):
         self.db_name = db_name
