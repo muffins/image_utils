@@ -8,3 +8,6 @@ image_cache.sqlite-journal
 # Ignore any report files generated
 img_util_*
 gen_database_*
+
+# Ignore the comipled artifacts
+build/
